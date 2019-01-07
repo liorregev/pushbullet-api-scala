@@ -37,4 +37,11 @@ resolvers ++= Seq(
   Resolver.sonatypeRepo("snapshots")
 )
 
-libraryDependencies ++= Seq()
+libraryDependencies ++= Seq(
+  "com.softwaremill.sttp" %% "core"            % "1.5.2",
+  "com.softwaremill.sttp" %% "play-json"       % "1.5.2",
+  "com.typesafe.play"     %% "play-json"       % "2.6.13",
+  "org.typelevel"         %% "cats-core"       % "1.5.0",
+  "org.slf4j"              % "slf4j-api"       % "1.7.25",
+  "ch.qos.logback"         % "logback-classic" % "1.2.3",
+)
