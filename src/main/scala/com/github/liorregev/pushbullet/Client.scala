@@ -2,7 +2,7 @@ package com.github.liorregev.pushbullet
 
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
-import com.github.liorregev.pushbullet.domain.{Operations, Request, Response}
+import com.github.liorregev.pushbullet.domain.{DomainObject, Operations, Request, Response}
 import com.softwaremill.sttp.{Response => STTPResponse, _}
 import play.api.libs.json._
 
@@ -19,10 +19,10 @@ final case class HTTPError(response: STTPResponse[String]) extends ClientError
 class Client(url: Uri, apiKey: String)(implicit wsClient: SttpBackend[Future, Nothing], loggerFactory: LoggerContext) {
   private lazy val logger = loggerFactory.getLogger(getClass)
 
-  def request[Resp <: Response[_], Req <: Request[_, Resp]](req: Req)
-                                                           (implicit ec: ExecutionContext, writes: Writes[Req]): Future[Either[ClientError, Resp]] = {
+  def request[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp])
+                                                         (implicit ec: ExecutionContext): Future[Either[ClientError, Resp]] = {
     logger.info(s"Processing $req")
-    runRequest[Resp, Req](req)
+    runRequest(req)
       .map{
         response =>
           for {
@@ -36,8 +36,7 @@ class Client(url: Uri, apiKey: String)(implicit wsClient: SttpBackend[Future, No
       }
   }
 
-  private def runRequest[Resp <: Response[_], Req <: Request[_, Resp]](req: Req)
-                                                                (implicit writes: Writes[Req]): Future[STTPResponse[String]] = {
+  private def runRequest[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp]): Future[STTPResponse[String]] = {
     logger.debug(s"Sending request $req")
     val baseRequest = sttp
       .headers(
@@ -49,14 +48,14 @@ class Client(url: Uri, apiKey: String)(implicit wsClient: SttpBackend[Future, No
     val finalRequest = req.op match {
       case Operations.Create =>
         baseRequest
-          .body(writes.writes(req).toString)
+          .body(req.toJson.toString)
       case Operations.Delete(iden) =>
         baseRequest
           .method(req.op.method, url.path(url.path ++ Seq(req.objName, iden)))
       case Operations.Update(iden) =>
         baseRequest
           .method(req.op.method, url.path(url.path ++ Seq(req.objName, iden)))
-          .body(writes.writes(req).toString)
+          .body(req.toJson.toString)
       case Operations.List =>
         baseRequest
     }

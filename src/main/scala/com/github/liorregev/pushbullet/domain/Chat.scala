@@ -64,6 +64,7 @@ final case class ChatListRequest(cursor: Option[String] = None) extends Request[
   override val op: Operation = Operations.List
   override val responseReads: Reads[ChatListResponse] = Json.reads[ChatListResponse]
   override val objName: String = "chats"
+  override lazy val toJson: JsObject = Json.writes[ChatListRequest].writes(this)
 }
 object ChatListRequest {
   implicit val format: OFormat[ChatListRequest] = Json.format[ChatListRequest]
@@ -74,6 +75,7 @@ final case class CreateChatRequest(cursor: Option[String] = None) extends Reques
   override val op: Operation = Operations.Create
   override val responseReads: Reads[CreateChatResponse] = (json: JsValue) => Chat.format.reads(json).map(CreateChatResponse)
   override val objName: String = "chats"
+  override lazy val toJson: JsObject = Json.writes[CreateChatRequest].writes(this)
 }
 object CreateChatRequest {
   implicit val format: OFormat[CreateChatRequest] = Json.format[CreateChatRequest]
@@ -84,6 +86,7 @@ final case class DeleteChatRequest(iden: Iden) extends Request[Chat, DeleteChatR
   override val op: Operation = Operations.Delete(iden)
   override val responseReads: Reads[DeleteChatResponse.type] = _ => JsSuccess(DeleteChatResponse)
   override val objName: String = "chats"
+  override lazy val toJson: JsObject = Json.writes[DeleteChatRequest].writes(this)
 }
 object DeleteChatRequest {
   implicit val format: OFormat[DeleteChatRequest] = Json.format[DeleteChatRequest]
@@ -94,6 +97,7 @@ final case class UpdateChatRequest(iden: Iden, muted: Boolean) extends Request[C
   override val op: Operation = Operations.Update(iden)
   override val responseReads: Reads[UpdateChatResponse] = (json: JsValue) => Chat.format.reads(json).map(UpdateChatResponse)
   override val objName: String = "chats"
+  override lazy val toJson: JsObject = Json.writes[UpdateChatRequest].writes(this)
 }
 object UpdateChatRequest {
   implicit val format: OFormat[UpdateChatRequest] = Json.format[UpdateChatRequest]

@@ -32,4 +32,5 @@ trait Request[Obj <: DomainObject, Resp <: Response[Obj]] extends Product with S
   def op: Operation
   def responseReads: Reads[Resp]
   def objName: String
+  def toJson: JsObject
 }
