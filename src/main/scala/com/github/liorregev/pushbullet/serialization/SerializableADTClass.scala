@@ -8,12 +8,12 @@ final case class SerializableADTClass[Parent, T <: Parent : ClassTag](typeName: 
   extends SerializableADT[Parent] {
 
   val reads: PartialFunction[JsValue, JsResult[Parent]] = {
-    case js: JsObject if (js \ "typeName").as[String] == typeName =>
+    case js: JsObject if (js \ "type").as[String] == typeName =>
       format.reads(js)
   }
 
   val writes: PartialFunction[Parent, JsObject] = {
     case obj: T =>
-      format.writes(obj) + ("typeName" -> JsString(typeName))
+      format.writes(obj) + ("type" -> JsString(typeName))
   }
 }

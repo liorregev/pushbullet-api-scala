@@ -1,37 +1,35 @@
 package com.github.liorregev.pushbullet.domain
 
-import cats.Id
 import com.softwaremill.sttp.Method
 import play.api.libs.json._
 
-trait DomainObject {
+trait DomainObject extends Product with Serializable {
   def name: String
 }
 
-sealed trait Operation[C[_]] {
+sealed trait Operation {
   def method: Method
 }
+
 object Operations {
-  case object Create extends Operation[Id] {
+  case object Create extends Operation {
     override val method: Method = Method.POST
   }
-  case object Update extends Operation[Id] {
+  final case class Update(iden: Iden) extends Operation {
     override val method: Method = Method.POST
   }
-  case object Delete extends Operation[Id] {
+  final case class Delete(iden: Iden) extends Operation {
     override val method: Method = Method.DELETE
   }
-  case object List extends Operation[Seq] {
+  case object List extends Operation {
     override val method: Method = Method.GET
   }
 }
 
-trait Response[Obj <: DomainObject, C[_]] extends Product with Serializable {
-  def result: C[Obj]
-}
+trait Response[Obj <: DomainObject] extends Product with Serializable
 
-trait Request[Obj <: DomainObject, C[_], Resp <: Response[Obj, C]] extends Product with Serializable {
-  def op: Operation[C]
+trait Request[Obj <: DomainObject, Resp <: Response[Obj]] extends Product with Serializable {
+  def op: Operation
   def responseReads: Reads[Resp]
+  def objName: String
 }
-

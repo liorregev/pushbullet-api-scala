@@ -33,14 +33,13 @@ package object serialization {
       write(o)
   }
 
-  def snakeCaseFormat[T](originalFormat: Format[T]): Format[T] = new Format[T] {
-    override def writes(o: T): JsValue = originalFormat.writes(o) match {
-      case res: JsObject =>
-        JsObject(res.as[Map[String, JsValue]].map {
+  def snakeCaseFormat[T](originalFormat: OFormat[T]): OFormat[T] = new OFormat[T] {
+    override def writes(o: T): JsObject =
+      JsObject(originalFormat.writes(o)
+        .as[Map[String, JsValue]]
+        .map {
           case (key, value) => (camelToUnderscores(key), value)
         })
-      case v => v
-    }
 
     override def reads(json: JsValue): JsResult[T] = json match {
       case data: JsObject =>
