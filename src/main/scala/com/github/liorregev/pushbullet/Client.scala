@@ -1,9 +1,14 @@
 package com.github.liorregev.pushbullet
 
+import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers._
+import akka.stream.ActorMaterializer
+import akka.util.ByteString
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
 import com.github.liorregev.pushbullet.domain.{DomainObject, Operations, Request, Response}
-import com.softwaremill.sttp.{Response => STTPResponse, _}
 import play.api.libs.json._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -13,20 +18,28 @@ final case class ResponseParseError(jsError: JsError) extends ClientError
 object ResponseParseError {
   def apply(errors: Seq[(JsPath, Seq[JsonValidationError])]): ResponseParseError = new ResponseParseError(JsError(errors))
 }
+final case class HTTPError(response: HttpResponse) extends ClientError
 
-final case class HTTPError(response: STTPResponse[String]) extends ClientError
-
-class Client(url: Uri, apiKey: String)(implicit wsClient: SttpBackend[Future, Nothing], loggerFactory: LoggerContext) {
+class Client(baseUrl: String, apiKey: String)(implicit system: ActorSystem, loggerFactory: LoggerContext, materializer: ActorMaterializer) {
   private lazy val logger = loggerFactory.getLogger(getClass)
+  private lazy val http = Http()
 
   def request[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp])
                                                          (implicit ec: ExecutionContext): Future[Either[ClientError, Resp]] = {
     logger.info(s"Processing $req")
     runRequest(req)
+      .flatMap {
+        response =>
+          if(response.status.isSuccess()) {
+            response.entity.dataBytes.runFold(ByteString(""))(_ ++ _).map(_.decodeString("utf-8").asRight[ClientError])
+          } else {
+            Future(Left[ClientError, String](HTTPError(response)))
+          }
+      }
       .map{
         response =>
           for {
-            body <- response.body.leftMap[ClientError](_ => HTTPError(response))
+            body <- response
             parsedBody <- Json.parse(body).validate[JsObject].asEither.leftMap[ClientError](ResponseParseError.apply)
             relevantPart = parsedBody.value.get(req.objName).flatMap(_.validate[JsObject].asOpt).getOrElse(parsedBody)
             result <- req.responseReads.reads(parsedBody).asEither
@@ -36,29 +49,31 @@ class Client(url: Uri, apiKey: String)(implicit wsClient: SttpBackend[Future, No
       }
   }
 
-  private def runRequest[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp]): Future[STTPResponse[String]] = {
+  private def runRequest[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp]): Future[HttpResponse] = {
     logger.debug(s"Sending request $req")
-    val baseRequest = sttp
-      .headers(
-        "Access-Token" -> apiKey,
-        "Content-Type" -> "application/json"
+    val baseRequest = HttpRequest()
+      .withHeaders(
+        RawHeader("Access-Token", apiKey),
+        `Content-Type`(ContentTypes.`application/json`),
       )
-      .method(req.op.method, url.path(url.path :+ req.objName))
+      .withMethod(req.op.method)
 
     val finalRequest = req.op match {
       case Operations.Create =>
         baseRequest
-          .body(req.toJson.toString)
+          .withEntity(HttpEntity(ContentTypes.`application/json`, req.toJson.toString))
+          .withUri(s"$baseUrl/${req.objName}")
       case Operations.Delete(iden) =>
         baseRequest
-          .method(req.op.method, url.path(url.path ++ Seq(req.objName, iden)))
+          .withUri(s"$baseUrl/${req.objName}/$iden")
       case Operations.Update(iden) =>
         baseRequest
-          .method(req.op.method, url.path(url.path ++ Seq(req.objName, iden)))
-          .body(req.toJson.toString)
+          .withUri(s"$baseUrl/${req.objName}/$iden")
+          .withEntity(HttpEntity(ContentTypes.`application/json`, req.toJson.toString))
       case Operations.List =>
         baseRequest
+          .withUri(s"$baseUrl/${req.objName}")
     }
-    finalRequest.send()
+    http.singleRequest(finalRequest)
   }
 }

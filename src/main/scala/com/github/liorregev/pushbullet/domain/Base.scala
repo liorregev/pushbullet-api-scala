@@ -1,6 +1,6 @@
 package com.github.liorregev.pushbullet.domain
 
-import com.softwaremill.sttp.Method
+import akka.http.scaladsl.model.{HttpMethod, HttpMethods}
 import play.api.libs.json._
 
 trait DomainObject extends Product with Serializable {
@@ -8,21 +8,21 @@ trait DomainObject extends Product with Serializable {
 }
 
 sealed trait Operation {
-  def method: Method
+  def method: HttpMethod
 }
 
 object Operations {
   case object Create extends Operation {
-    override val method: Method = Method.POST
+    override val method: HttpMethod = HttpMethods.POST
   }
   final case class Update(iden: Iden) extends Operation {
-    override val method: Method = Method.POST
+    override val method: HttpMethod = HttpMethods.POST
   }
   final case class Delete(iden: Iden) extends Operation {
-    override val method: Method = Method.DELETE
+    override val method: HttpMethod = HttpMethods.DELETE
   }
   case object List extends Operation {
-    override val method: Method = Method.GET
+    override val method: HttpMethod = HttpMethods.GET
   }
 }
 
