@@ -1,10 +1,24 @@
 package com.github.liorregev.pushbullet.domain
 
+import java.time.Instant
+
 import akka.http.scaladsl.model.{HttpMethod, HttpMethods}
 import play.api.libs.json._
 
 trait DomainObject extends Product with Serializable {
   def name: String
+  def iden: Iden
+  def created: Instant
+  def modified: Instant
+  def isActive: Boolean
+}
+
+trait ActiveDomainObject extends DomainObject { thisObject =>
+  override final val isActive: Boolean = true
+}
+
+trait InactiveDomainObject extends DomainObject { thisObject =>
+  override final val isActive: Boolean = false
 }
 
 sealed trait Operation {
@@ -26,11 +40,47 @@ object Operations {
   }
 }
 
-trait Response[Obj <: DomainObject] extends Product with Serializable
+trait Response[+Obj <: DomainObject] extends Product with Serializable
 
 trait Request[Obj <: DomainObject, Resp <: Response[Obj]] extends Product with Serializable {
   def op: Operation
   def responseReads: Reads[Resp]
   def objName: String
   def toJson: JsObject
+}
+
+trait ListResponse[Obj <: DomainObject] extends Response[Obj] {
+  def results: Seq[Obj]
+  def cursor: Option[String]
+}
+trait ListRequest[Obj <: DomainObject, Resp <: ListResponse[Obj]] extends Request[Obj, Resp] {
+  def cursor: Option[String]
+  def modifiedAfter: Option[Instant]
+  def params: Map[String, String] = Map.empty
+  override final val op: Operation = Operations.List(params ++ Seq(
+    cursor.map("cursor" -> _),
+    modifiedAfter.map(_.toEpochMilli.toDouble / 1000).map("modified_after" -> _.toString)
+  ).flatten)
+}
+
+trait CreateResponse[Obj <: DomainObject] extends Response[Obj] {
+  def result: Obj
+}
+trait CreateRequest[Obj <: DomainObject, Resp <: CreateResponse[Obj]] extends Request[Obj, Resp] {
+  override final val op: Operation = Operations.Create
+}
+
+case object DeleteResponse extends Response[Nothing]
+trait DeleteRequest[Obj <: DomainObject] extends Request[Obj, DeleteResponse.type] {
+  def iden: Iden
+  override final val op: Operation = Operations.Delete(iden)
+  override final val responseReads: Reads[DeleteResponse.type] = _ => JsSuccess(DeleteResponse)
+}
+
+trait UpdateResponse[Obj <: DomainObject] extends Response[Obj] {
+  def result: Obj
+}
+trait UpdateRequest[Obj <: DomainObject, Resp <: UpdateResponse[Obj]] extends Request[Obj, Resp] {
+  def iden: Iden
+  override final val op: Operation = Operations.Update(iden)
 }
