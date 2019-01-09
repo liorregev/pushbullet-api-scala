@@ -20,7 +20,7 @@ object ResponseParseError {
 }
 final case class HTTPError(response: HttpResponse) extends ClientError
 
-class Client(baseUrl: String, apiKey: String)(implicit system: ActorSystem, loggerFactory: LoggerContext, materializer: ActorMaterializer) {
+class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerFactory: LoggerContext, materializer: ActorMaterializer) {
   private lazy val logger = loggerFactory.getLogger(getClass)
   private lazy val http = Http()
 
@@ -62,17 +62,17 @@ class Client(baseUrl: String, apiKey: String)(implicit system: ActorSystem, logg
       case Operations.Create =>
         baseRequest
           .withEntity(HttpEntity(ContentTypes.`application/json`, req.toJson.toString))
-          .withUri(s"$baseUrl/${req.objName}")
+          .withUri(baseUrl.withPath(baseUrl.path / req.objName))
       case Operations.Delete(iden) =>
         baseRequest
-          .withUri(s"$baseUrl/${req.objName}/$iden")
+          .withUri(baseUrl.withPath(baseUrl.path / req.objName / iden))
       case Operations.Update(iden) =>
         baseRequest
-          .withUri(s"$baseUrl/${req.objName}/$iden")
+          .withUri(baseUrl.withPath(baseUrl.path / req.objName / iden))
           .withEntity(HttpEntity(ContentTypes.`application/json`, req.toJson.toString))
-      case Operations.List =>
+      case Operations.List(params) =>
         baseRequest
-          .withUri(s"$baseUrl/${req.objName}")
+          .withUri(baseUrl.withPath(baseUrl.path / req.objName).withQuery(Uri.Query(params)))
     }
     http.singleRequest(finalRequest)
   }

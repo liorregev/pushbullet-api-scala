@@ -21,7 +21,7 @@ object Operations {
   final case class Delete(iden: Iden) extends Operation {
     override val method: HttpMethod = HttpMethods.DELETE
   }
-  case object List extends Operation {
+  final case class List(params: Map[String, String] = Map.empty) extends Operation {
     override val method: HttpMethod = HttpMethods.GET
   }
 }

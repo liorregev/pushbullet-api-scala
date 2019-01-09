@@ -6,7 +6,11 @@ import cats.syntax.either._
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
 
-sealed trait Partner extends Product with Serializable
+sealed trait Partner extends Product with Serializable {
+  def email: String
+  def emailNormalized: String
+  def imageUrl: String
+}
 
 object Partner {
   final case class ByEmail(email: String, emailNormalized: String, imageUrl: String) extends Partner
@@ -60,8 +64,19 @@ object Chat {
 }
 
 final case class ChatListResponse(chats: Seq[Chat], cursor: Option[String]) extends Response[Chat]
-final case class ChatListRequest(cursor: Option[String] = None) extends Request[Chat, ChatListResponse] {
-  override val op: Operation = Operations.List
+final case class ChatListRequest(cursor: Option[String] = None, modifiedAfter: Option[Instant]= None)
+  extends Request[Chat, ChatListResponse] {
+
+  override val op: Operation = Operations.List(
+    Seq(
+      cursor.map("cursor" -> _),
+      modifiedAfter
+        .map(_.toEpochMilli.toDouble / 1000)
+        .map("modified_after" -> _.toString)
+    )
+      .flatten
+      .toMap
+  )
   override val responseReads: Reads[ChatListResponse] = Json.reads[ChatListResponse]
   override val objName: String = "chats"
   override lazy val toJson: JsObject = Json.writes[ChatListRequest].writes(this)
@@ -71,7 +86,7 @@ object ChatListRequest {
 }
 
 final case class CreateChatResponse(chat: Chat) extends Response[Chat]
-final case class CreateChatRequest(cursor: Option[String] = None) extends Request[Chat, CreateChatResponse] {
+final case class CreateChatRequest(email: String) extends Request[Chat, CreateChatResponse] {
   override val op: Operation = Operations.Create
   override val responseReads: Reads[CreateChatResponse] = (json: JsValue) => Chat.format.reads(json).map(CreateChatResponse)
   override val objName: String = "chats"
