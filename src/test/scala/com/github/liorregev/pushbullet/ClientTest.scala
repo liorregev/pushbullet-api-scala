@@ -1,8 +1,10 @@
 package com.github.liorregev.pushbullet
 
+import java.io.File
 import java.time.Instant
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.ContentTypes
 import akka.stream.ActorMaterializer
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
@@ -11,6 +13,7 @@ import org.scalatest._
 
 import scala.concurrent.Future
 
+@SuppressWarnings(Array("org.wartremover.warts.Product", "org.wartremover.warts.Serializable"))
 class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with EitherValues with OptionValues {
   implicit lazy val loggerFactory: LoggerContext = {
     val loggerContext = new LoggerContext()
@@ -45,7 +48,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
       When("Creating a new chat")
       val response = client.request(CreateChatRequest(testEmail))
       Then("The chat should be created")
-      response.map(result => result should be ('right))
+      response.map(_ should be ('right))
     }
 
     scenario("Creating a duplicate chat") {
@@ -75,7 +78,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
           }.value
         )
       Then("The chat should be deleted")
-      response.map(result => result should be ('right))
+      response.map(_ should be ('right))
     }
 
     scenario("Unmuting chat") {
@@ -90,7 +93,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
           }.value
         )
       Then("The chat should be deleted")
-      response.map(result => result should be ('right))
+      response.map(_ should be ('right))
     }
 
     scenario("Deleting chat") {
@@ -105,7 +108,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
           }.value
         )
       Then("The chat should be deleted")
-      response.map(result => result should be ('right))
+      response.map(_ should be ('right))
     }
 
     scenario("Deleting inactive chat") {
@@ -121,6 +124,32 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
         )
       Then("The chat should be deleted")
       response.map(result => result should be ('left))
+    }
+  }
+
+  feature("Pushes api") {
+    val client = new Client("https://api.pushbullet.com/v2", "o.i8br1Q7KYE3IXHEPY01i7b1Qz2Z3Mz6j")
+    ignore("Pushing a file") {
+      When("Requesting to list chats")
+      val response = client.uploadFile("myPushedFile.png",
+        ContentTypes.`text/plain(UTF-8)`,
+        new File(getClass.getResource("/test.txt").toURI))
+          .flatMap( resp =>
+            resp.fold(_ => Future.successful(resp),
+              uploadResp => {
+                val pushData = PushData.File("This is my file push", PushData.FileData(uploadResp))
+                client.request(CreatePushRequest(PushTarget.Broadcast, pushData))
+              })
+          )
+      Then("The response should be empty")
+      response.map(_ should be ('right))
+    }
+
+    scenario("Pushing a note") {
+      When("Pushing a note")
+      val response = client.request(CreatePushRequest(PushTarget.Broadcast, PushData.Note("my title", "my body")))
+      Then("The response should be OK")
+      response.map(_ should be ('right))
     }
   }
 }

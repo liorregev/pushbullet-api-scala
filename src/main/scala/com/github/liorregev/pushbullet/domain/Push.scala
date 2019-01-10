@@ -3,6 +3,7 @@ package com.github.liorregev.pushbullet.domain
 import java.time.Instant
 
 import cats.data.NonEmptyList
+import com.github.liorregev.pushbullet.UploadFileResponse
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
 
@@ -10,7 +11,30 @@ sealed trait Push extends DomainObject {
   override final val name: String = "pushes"
 }
 object Push {
-  implicit val format: OFormat[Push] = domainObjectFormat(Json.format[ActivePush], Json.format[InactivePush])
+  implicit val format: OFormat[Push] = domainObjectFormat(
+    new OFormat[ActivePush] {
+      private val simpleFormat = Json.format[ActivePush]
+      override def writes(o: ActivePush): JsObject = simpleFormat
+        .transform(flattenFieldToObject("senderInfo", "sender_") _)
+        .transform(flattenFieldToObject("receiverInfo", "receiver_") _)
+        .transform(flattenFieldToObject("pushData") _)
+        .writes(o)
+      override def reads(json: JsValue): JsResult[ActivePush] = for {
+        jsObj <- json.validate[JsObject]
+        senderInfo <- JsObject(jsObj.value.map(f => f._1.replace("sender_", "") -> f._2)).validate[PartyInfo]
+        receiverInfo <- JsObject(jsObj.value.map(f => f._1.replace("receiver_", "") -> f._2)).validate[PartyInfo]
+        pushData <- jsObj.validate[PushData]
+        direction <- jsObj.validate[PushDirection]
+        mutatedObj = jsObj ++ JsObject(Map(
+          "senderInfo" -> Json.toJsObject(senderInfo),
+          "receiverInfo" -> Json.toJsObject(receiverInfo),
+          "pushData" -> Json.toJsObject(pushData),
+          "direction" -> Json.toJsObject(direction)
+        ))
+        result <- mutatedObj.validate[ActivePush](simpleFormat)
+      } yield result
+    },
+    Json.format[InactivePush])
 }
 
 sealed trait PushData {
@@ -19,6 +43,12 @@ sealed trait PushData {
 object PushData {
   final case class ImageData(imageUrl: String, imageWidth: Long, imageHeight: Long)
   final case class FileData(fileName: String, fileType: String, fileUrl:String, imageData: Option[ImageData])
+
+  object FileData {
+    def apply(uploadFileResponse: UploadFileResponse): FileData =
+      FileData(uploadFileResponse.fileName, uploadFileResponse.fileType, uploadFileResponse.fileUrl, None)
+  }
+
   implicit val imageDataFormat: OFormat[ImageData] = snakeCaseFormat(Json.format)
   implicit val fileDataFormat: OFormat[FileData] = new OFormat[FileData] {
     private val simpleFormat = snakeCaseFormat(Json.format[FileData])
@@ -79,13 +109,13 @@ object PushDirection {
   )
 }
 
-final case class PartyInfo(iden: SingleItem, email: String, emailNormalized: String, name: String)
+final case class PartyInfo(iden: SingleItem, email: String, emailNormalized: String, name: Option[String])
 object PartyInfo {
   implicit val format: OFormat[PartyInfo] = snakeCaseFormat(Json.format)
 }
 
 final case class InactivePush(baseInfo: DomainObjectBaseInfo) extends Push with InactiveDomainObject
-final case class ActivePush(baseInfo: DomainObjectBaseInfo, pushData: PushData, dismissed: Boolean, guid: String,
+final case class ActivePush(baseInfo: DomainObjectBaseInfo, pushData: PushData, dismissed: Boolean, guid: Option[String],
                             direction: PushDirection, senderInfo: PartyInfo, receiverInfo: PartyInfo,
                             targetDeviceIden: Option[SingleItem], sourceDeviceIden: Option[SingleItem],
                             clientIden: Option[SingleItem], channelIden: Option[SingleItem])
@@ -108,6 +138,7 @@ object PushTarget {
   final case class Email(Email: String) extends PushTarget
   final case class Channel(channelTag: String) extends PushTarget
   final case class Client(clientIden: SingleItem) extends PushTarget
+  case object Broadcast extends PushTarget
 
   implicit val format: OFormat[PushTarget] = new OFormat[PushTarget] {
     private val emailFormat: OFormat[Email] = snakeCaseFormat(Json.format[Email])
@@ -116,20 +147,25 @@ object PushTarget {
     private val deviceFormat: OFormat[Device] = snakeCaseFormat(Json.format[Device])
 
     @SuppressWarnings(Array("org.wartremover.warts.Product", "org.wartremover.warts.Serializable"))
-    override def reads(json: JsValue): JsResult[PushTarget] =
-      NonEmptyList.of(emailFormat, channelFormat, clientFormat, deviceFormat)
-        .map(_.reads(json))
-        .reduceLeft(_ orElse _)
-        .fold(
-          JsError.apply,
-          (target: PushTarget) => JsSuccess(target)
-        )
+    override def reads(json: JsValue): JsResult[PushTarget] = {
+      if(json.asOpt[String].contains("broadcast"))
+        JsSuccess(Broadcast)
+      else
+        NonEmptyList.of(emailFormat, channelFormat, clientFormat, deviceFormat)
+          .map(_.reads(json))
+          .reduceLeft(_ orElse _)
+          .fold(
+            JsError.apply,
+            (target: PushTarget) => JsSuccess(target)
+          )
+    }
 
     override def writes(o: PushTarget): JsObject = o match {
       case v: Device => deviceFormat.writes(v)
       case v: Email => emailFormat.writes(v)
       case v: Channel => channelFormat.writes(v)
       case v: Client => clientFormat.writes(v)
+      case Broadcast => JsObject.empty
     }
   }
 }
@@ -140,7 +176,10 @@ final case class CreatePushResponse(push: Push) extends CreateResponse[Push] {
 final case class CreatePushRequest(pushTarget: PushTarget, pushData: PushData) extends CreateRequest[Push, CreatePushResponse] {
   override val responseReads: Reads[CreatePushResponse] = (json: JsValue) => Push.format.reads(json).map(CreatePushResponse)
   override val objName: String = "pushes"
-  override def toJson: JsObject = Json.writes[CreatePushRequest].writes(this)
+  override def toJson: JsObject = Json.writes[CreatePushRequest]
+    .transform(flattenFieldToObject("pushTarget") _)
+    .transform(flattenFieldToObject("pushData") _)
+    .writes(this)
 }
 
 final case class DeletePushRequest(iden: Iden) extends DeleteRequest[Push] {

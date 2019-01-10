@@ -60,4 +60,10 @@ package object serialization {
     m.group(1).toUpperCase()
   })
 
+  def flattenFieldToObject(field: String, prefix: String = "")(obj: JsObject): JsObject = {
+    (obj \ field).asOpt[JsObject]
+      .map(_.fields.map(f => prefix + f._1 -> f._2))
+      .map(fields => JsObject(fields) ++ obj - field)
+      .getOrElse(obj)
+  }
 }
