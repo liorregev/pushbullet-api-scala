@@ -3,15 +3,19 @@ package com.github.liorregev.pushbullet
 import java.io.File
 import java.nio.file.Files
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
+import akka.http.scaladsl.model.ws.{Message, WebSocketRequest, WebSocketUpgradeResponse}
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.ByteString
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
 import com.github.liorregev.pushbullet.domain.{AllItems, DomainObject, Operation, Request, Response, SingleItem}
+import com.github.liorregev.pushbullet.listener.Listener
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
 
@@ -160,5 +164,12 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
             HTTPError(response).asLeft[UploadFileResponse]
           }
       }
+  }
+
+  def startListening(): (Future[WebSocketUpgradeResponse], NotUsed) = {
+    val listener = new Listener()
+    val sink = Sink.fromGraph(listener.processGraph)
+    val webSocketFlow = http.webSocketClientFlow(WebSocketRequest(s"wss://stream.pushbullet.com/websocket/$apiKey"))
+    Source.maybe.viaMat(webSocketFlow)(Keep.right).toMat(sink)(Keep.both).run()
   }
 }
