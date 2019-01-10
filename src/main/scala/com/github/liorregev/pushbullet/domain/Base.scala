@@ -5,7 +5,7 @@ import java.time.Instant
 import akka.http.scaladsl.model.{HttpMethod, HttpMethods}
 import play.api.libs.json._
 
-final case class DomainObjectBaseInfo(iden: Iden, created: Instant, modified: Instant)
+final case class DomainObjectBaseInfo(iden: SingleItem, created: Instant, modified: Instant)
 object DomainObjectBaseInfo {
   implicit val format: OFormat[DomainObjectBaseInfo] = Json.format
 }
@@ -32,7 +32,7 @@ object Operation {
   case object Create extends Operation {
     override val method: HttpMethod = HttpMethods.POST
   }
-  final case class Update(iden: Iden) extends Operation {
+  final case class Update(iden: SingleItem) extends Operation {
     override val method: HttpMethod = HttpMethods.POST
   }
   final case class Delete(iden: Iden) extends Operation {
@@ -84,6 +84,6 @@ trait UpdateResponse[Obj <: DomainObject] extends Response[Obj] {
   def result: Obj
 }
 trait UpdateRequest[Obj <: DomainObject, Resp <: UpdateResponse[Obj]] extends Request[Obj, Resp] {
-  def iden: Iden
+  def iden: SingleItem
   override final val op: Operation = Operation.Update(iden)
 }

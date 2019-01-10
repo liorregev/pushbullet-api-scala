@@ -3,10 +3,8 @@ package com.github.liorregev.pushbullet
 import java.time.Instant
 
 import play.api.libs.json._
-import cats.syntax.either._
 
 package object domain {
-  type Iden = String
 
   implicit val instantFormat: Format[Instant] = new Format[Instant] {
     override def reads(json: JsValue): JsResult[Instant] = json match {
@@ -19,17 +17,13 @@ package object domain {
 
   def domainObjectFormat[Obj <: DomainObject, A <: Obj with ActiveDomainObject, I <: Obj with InactiveDomainObject](activeFormat: OFormat[A], inactiveFormat: OFormat[I]): OFormat[Obj] = new OFormat[Obj] {
     override def reads(json: JsValue): JsResult[Obj] = {
-      val result = for {
-        obj <- json match {
-          case o: JsObject => o.asRight[JsError]
-          case _ => JsError("Not an object").asLeft[JsObject]
-        }
-        baseInfo <- json.validate[DomainObjectBaseInfo].asEither.leftMap(JsError.apply)
-        mutatedObj = obj ++ JsObject(Map("baseInfo" -> Json.toJsObject(baseInfo)))
-        activeField <- Either.fromOption(mutatedObj.value.get("active"), JsError(__ \ "active", "Missing"))
-        active <- activeField.validate[Boolean].asEither.leftMap(errors => JsError(errors))
-      } yield if(active) activeFormat.reads(mutatedObj).map((o: Obj) => o) else inactiveFormat.reads(mutatedObj).map((o: Obj) => o)
-      result.fold(identity, identity)
+      for {
+        jsObj <- json.validate[JsObject]
+        baseInfo <- json.validate[DomainObjectBaseInfo]
+        mutatedObj = jsObj ++ JsObject(Map("baseInfo" -> Json.toJsObject(baseInfo)))
+        active <- (mutatedObj \ "active").validate[Boolean]
+        result <- if (active) activeFormat.reads(mutatedObj).map((o: Obj) => o) else inactiveFormat.reads(mutatedObj).map((o: Obj) => o)
+      } yield result
     }
 
     override def writes(o: Obj): JsObject = {

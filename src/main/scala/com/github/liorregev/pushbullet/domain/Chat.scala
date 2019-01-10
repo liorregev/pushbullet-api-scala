@@ -13,7 +13,7 @@ sealed trait Partner extends Product with Serializable {
 
 object Partner {
   final case class ByEmail(email: String, emailNormalized: String, imageUrl: String) extends Partner
-  final case class ByUser(iden: Iden, email: String, emailNormalized: String, imageUrl: String, name: String) extends Partner
+  final case class ByUser(iden: SingleItem, email: String, emailNormalized: String, imageUrl: String, name: String) extends Partner
 
   implicit val format: OFormat[Partner] =
     formatFor(
@@ -56,7 +56,7 @@ object CreateChatRequest {
   implicit val format: OFormat[CreateChatRequest] = Json.format[CreateChatRequest]
 }
 
-final case class DeleteChatRequest(iden: Iden) extends DeleteRequest[Chat] {
+final case class DeleteChatRequest(iden: SingleItem) extends DeleteRequest[Chat] {
   override val objName: String = "chats"
   override lazy val toJson: JsObject = Json.writes[DeleteChatRequest].writes(this)
 }
@@ -67,7 +67,7 @@ object DeleteChatRequest {
 final case class UpdateChatResponse(chat: Chat) extends UpdateResponse[Chat] {
   override val result: Chat = chat
 }
-final case class UpdateChatRequest(iden: Iden, muted: Boolean) extends UpdateRequest[Chat, UpdateChatResponse] {
+final case class UpdateChatRequest(iden: SingleItem, muted: Boolean) extends UpdateRequest[Chat, UpdateChatResponse] {
   override val responseReads: Reads[UpdateChatResponse] = (json: JsValue) => Chat.format.reads(json).map(UpdateChatResponse)
   override val objName: String = "chats"
   override lazy val toJson: JsObject = Json.writes[UpdateChatRequest].writes(this)

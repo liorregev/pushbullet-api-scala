@@ -44,7 +44,7 @@ object CreateDeviceRequest {
   implicit val format: OFormat[CreateDeviceRequest] = Json.format[CreateDeviceRequest]
 }
 
-final case class DeleteDeviceRequest(iden: Iden) extends DeleteRequest[Device] {
+final case class DeleteDeviceRequest(iden: SingleItem) extends DeleteRequest[Device] {
   override val objName: String = "chats"
   override lazy val toJson: JsObject = Json.writes[DeleteDeviceRequest].writes(this)
 }
@@ -55,7 +55,7 @@ object DeleteDeviceRequest {
 final case class UpdateDeviceResponse(device: Device) extends UpdateResponse[Device] {
   override val result: Device = device
 }
-final case class UpdateDeviceRequest(iden: Iden, nickname: String, model: String, manufacturer: String, pushToken: String, appVersion: Long, icon: String, hasSms: String) extends UpdateRequest[Device, UpdateDeviceResponse] {
+final case class UpdateDeviceRequest(iden: SingleItem, nickname: String, model: String, manufacturer: String, pushToken: String, appVersion: Long, icon: String, hasSms: String) extends UpdateRequest[Device, UpdateDeviceResponse] {
   override val responseReads: Reads[UpdateDeviceResponse] = (json: JsValue) => Device.format.reads(json).map(UpdateDeviceResponse)
   override val objName: String = "chats"
   override lazy val toJson: JsObject = snakeCaseFormat(Json.format[UpdateDeviceRequest]).writes(this)
