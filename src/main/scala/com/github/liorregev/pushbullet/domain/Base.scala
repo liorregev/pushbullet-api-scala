@@ -5,11 +5,14 @@ import java.time.Instant
 import akka.http.scaladsl.model.{HttpMethod, HttpMethods}
 import play.api.libs.json._
 
+final case class DomainObjectBaseInfo(iden: Iden, created: Instant, modified: Instant)
+object DomainObjectBaseInfo {
+  implicit val format: OFormat[DomainObjectBaseInfo] = Json.format
+}
+
 trait DomainObject extends Product with Serializable {
   def name: String
-  def iden: Iden
-  def created: Instant
-  def modified: Instant
+  def baseInfo: DomainObjectBaseInfo
   def isActive: Boolean
 }
 
@@ -25,7 +28,7 @@ sealed trait Operation {
   def method: HttpMethod
 }
 
-object Operations {
+object Operation {
   case object Create extends Operation {
     override val method: HttpMethod = HttpMethods.POST
   }
@@ -57,7 +60,7 @@ trait ListRequest[Obj <: DomainObject, Resp <: ListResponse[Obj]] extends Reques
   def cursor: Option[String]
   def modifiedAfter: Option[Instant]
   def params: Map[String, String] = Map.empty
-  override final val op: Operation = Operations.List(params ++ Seq(
+  override final val op: Operation = Operation.List(params ++ Seq(
     cursor.map("cursor" -> _),
     modifiedAfter.map(_.toEpochMilli.toDouble / 1000).map("modified_after" -> _.toString)
   ).flatten)
@@ -67,13 +70,13 @@ trait CreateResponse[Obj <: DomainObject] extends Response[Obj] {
   def result: Obj
 }
 trait CreateRequest[Obj <: DomainObject, Resp <: CreateResponse[Obj]] extends Request[Obj, Resp] {
-  override final val op: Operation = Operations.Create
+  override final val op: Operation = Operation.Create
 }
 
 case object DeleteResponse extends Response[Nothing]
 trait DeleteRequest[Obj <: DomainObject] extends Request[Obj, DeleteResponse.type] {
   def iden: Iden
-  override final val op: Operation = Operations.Delete(iden)
+  override final val op: Operation = Operation.Delete(iden)
   override final val responseReads: Reads[DeleteResponse.type] = _ => JsSuccess(DeleteResponse)
 }
 
@@ -82,5 +85,5 @@ trait UpdateResponse[Obj <: DomainObject] extends Response[Obj] {
 }
 trait UpdateRequest[Obj <: DomainObject, Resp <: UpdateResponse[Obj]] extends Request[Obj, Resp] {
   def iden: Iden
-  override final val op: Operation = Operations.Update(iden)
+  override final val op: Operation = Operation.Update(iden)
 }

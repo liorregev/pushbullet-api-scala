@@ -8,7 +8,7 @@ import akka.stream.ActorMaterializer
 import akka.util.ByteString
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
-import com.github.liorregev.pushbullet.domain.{DomainObject, Operations, Request, Response}
+import com.github.liorregev.pushbullet.domain.{DomainObject, Operation, Request, Response}
 import play.api.libs.json._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -59,18 +59,18 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
       .withMethod(req.op.method)
 
     val finalRequest = req.op match {
-      case Operations.Create =>
+      case Operation.Create =>
         baseRequest
           .withEntity(HttpEntity(ContentTypes.`application/json`, req.toJson.toString))
           .withUri(baseUrl.withPath(baseUrl.path / req.objName))
-      case Operations.Delete(iden) =>
+      case Operation.Delete(iden) =>
         baseRequest
           .withUri(baseUrl.withPath(baseUrl.path / req.objName / iden))
-      case Operations.Update(iden) =>
+      case Operation.Update(iden) =>
         baseRequest
           .withUri(baseUrl.withPath(baseUrl.path / req.objName / iden))
           .withEntity(HttpEntity(ContentTypes.`application/json`, req.toJson.toString))
-      case Operations.List(params) =>
+      case Operation.List(params) =>
         baseRequest
           .withUri(baseUrl.withPath(baseUrl.path / req.objName).withQuery(Uri.Query(params)))
     }

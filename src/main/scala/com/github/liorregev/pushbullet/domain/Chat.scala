@@ -25,8 +25,8 @@ object Partner {
 sealed trait Chat extends DomainObject {
   override final val name: String = "chats"
 }
-final case class ActiveChat(iden: Iden, created: Instant, modified: Instant, muted: Option[Boolean], `with`: Partner) extends Chat with ActiveDomainObject
-final case class InactiveChat(iden: Iden, created: Instant, modified: Instant) extends Chat with InactiveDomainObject
+final case class ActiveChat(baseInfo: DomainObjectBaseInfo, muted: Option[Boolean], `with`: Partner) extends Chat with ActiveDomainObject
+final case class InactiveChat(baseInfo: DomainObjectBaseInfo) extends Chat with InactiveDomainObject
 
 object Chat {
   implicit val format: OFormat[Chat] = domainObjectFormat(Json.format[ActiveChat], Json.format[InactiveChat])

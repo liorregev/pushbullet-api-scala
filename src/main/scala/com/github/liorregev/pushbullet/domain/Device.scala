@@ -14,8 +14,8 @@ object Device {
   implicit val format: OFormat[Device] = domainObjectFormat(Json.format[ActiveDevice], Json.format[InactiveDevice])
 }
 
-final case class InactiveDevice(iden: Iden, created: Instant, modified: Instant) extends Device with InactiveDomainObject
-final case class ActiveDevice(iden: Iden, created: Instant, modified: Instant, icon: String, nickname: String,
+final case class InactiveDevice(baseInfo: DomainObjectBaseInfo) extends Device with InactiveDomainObject
+final case class ActiveDevice(baseInfo: DomainObjectBaseInfo, icon: String, nickname: String,
                               generatedNickname: Boolean, manufacturer: String, model: String, appVersion: Long,
                               fingerprint: String, key_fingerprint: String, pushToken: String, hasSms: String)
   extends Device with ActiveDomainObject

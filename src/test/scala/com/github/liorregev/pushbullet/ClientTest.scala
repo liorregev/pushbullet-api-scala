@@ -27,7 +27,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
     val testStart = client.request(ChatListRequest())
       .map(_.right.value)
       .map(_.chats.collect {
-        case ActiveChat(iden, _, _, _, partner) if partner.email == testEmail => iden
+        case ActiveChat(baseInfo, _, partner) if partner.email == testEmail => baseInfo.iden
       })
       .map(_.map(iden => client.request(DeleteChatRequest(iden)).map(_ => ())))
       .flatMap(responses => Future.sequence(responses).map(_ => Instant.now()))
@@ -56,7 +56,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
         .map(_.right.value)
         .flatMap(
           _.chats.headOption.collect {
-            case ActiveChat(_, _, _, _, partner) => client.request(CreateChatRequest(partner.email))
+            case ActiveChat(_, _, partner) => client.request(CreateChatRequest(partner.email))
           }.value
         )
       Then("The chat should be created")
@@ -71,7 +71,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
         .map(_.right.value)
         .flatMap(
           _.chats.headOption.collect {
-            case ActiveChat(iden, _, _, _, _) => client.request(UpdateChatRequest(iden, muted = true))
+            case ActiveChat(baseInfo, _, _) => client.request(UpdateChatRequest(baseInfo.iden, muted = true))
           }.value
         )
       Then("The chat should be deleted")
@@ -86,7 +86,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
         .map(_.right.value)
         .flatMap(
           _.chats.headOption.collect {
-            case ActiveChat(iden, _, _, Some(true), _) => client.request(UpdateChatRequest(iden, muted = false))
+            case ActiveChat(baseInfo, Some(true), _) => client.request(UpdateChatRequest(baseInfo.iden, muted = false))
           }.value
         )
       Then("The chat should be deleted")
@@ -101,7 +101,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
         .map(_.right.value)
         .flatMap(
           _.chats.headOption.collect {
-            case ActiveChat(iden, _, _, _, _) => client.request(DeleteChatRequest(iden))
+            case ActiveChat(baseInfo, _, _) => client.request(DeleteChatRequest(baseInfo.iden))
           }.value
         )
       Then("The chat should be deleted")
@@ -116,7 +116,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
         .map(_.right.value)
         .flatMap(
           _.chats.headOption.collect {
-            case InactiveChat(iden, _, _) => client.request(DeleteChatRequest(iden))
+            case InactiveChat(baseInfo) => client.request(DeleteChatRequest(baseInfo.iden))
           }.value
         )
       Then("The chat should be deleted")
