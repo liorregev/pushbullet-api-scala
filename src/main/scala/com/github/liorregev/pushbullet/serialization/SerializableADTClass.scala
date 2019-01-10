@@ -7,13 +7,13 @@ import scala.reflect.ClassTag
 final case class SerializableADTClass[Parent, T <: Parent : ClassTag](typeName: String, format: OFormat[T])
   extends SerializableADT[Parent] {
 
-  val reads: PartialFunction[JsValue, JsResult[Parent]] = {
-    case js: JsObject if (js \ "type").as[String] == typeName =>
+  def reads(fieldName: String): PartialFunction[JsValue, JsResult[Parent]] = {
+    case js: JsObject if (js \ fieldName).as[String] == typeName =>
       format.reads(js)
   }
 
-  val writes: PartialFunction[Parent, JsObject] = {
+  def writes(fieldName: String): PartialFunction[Parent, JsObject] = {
     case obj: T =>
-      format.writes(obj) + ("type" -> JsString(typeName))
+      format.writes(obj) + (fieldName -> JsString(typeName))
   }
 }

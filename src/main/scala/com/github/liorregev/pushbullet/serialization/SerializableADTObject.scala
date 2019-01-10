@@ -3,13 +3,13 @@ package com.github.liorregev.pushbullet.serialization
 import play.api.libs.json._
 
 final case class SerializableADTObject[T](typeName: String, instance: T) extends SerializableADT[T] {
-  val reads: PartialFunction[JsValue, JsResult[T]] = {
-    case obj: JsObject if (obj \ "type").as[String] == typeName =>
+  def reads(fieldName: String): PartialFunction[JsValue, JsResult[T]] = {
+    case obj: JsObject if (obj \ fieldName).as[String] == typeName =>
       JsSuccess(instance)
   }
 
-  val writes: PartialFunction[T, JsObject] = {
+  def writes(fieldName: String): PartialFunction[T, JsObject] = {
     case obj if obj == instance =>
-      JsObject(Map("type" -> JsString(typeName)))
+      JsObject(Map(fieldName -> JsString(typeName)))
   }
 }

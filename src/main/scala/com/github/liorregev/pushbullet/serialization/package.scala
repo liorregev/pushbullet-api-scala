@@ -17,16 +17,18 @@ package object serialization {
     SerializableADTObject[T](typeName, instance)
   }
 
-  def formatFor[T](formatters: SerializableADT[T]*): OFormat[T] = new OFormat[T] {
+  def formatFor[T](formatters: SerializableADT[T]*): OFormat[T] = formatForWithName("type", formatters: _*)
+
+  def formatForWithName[T](fieldName: String, formatters: SerializableADT[T]*): OFormat[T] = new OFormat[T] {
     private val read =
-      formatters.map(_.reads).fold(PartialFunction.empty)(_ orElse _).lift
+      formatters.map(_.reads(fieldName)).fold(PartialFunction.empty)(_ orElse _).lift
 
     private val write =
-      formatters.map(_.writes).fold(PartialFunction.empty)(_ orElse _)
+      formatters.map(_.writes(fieldName)).fold(PartialFunction.empty)(_ orElse _)
 
     override def reads(json: JsValue): JsResult[T] =
       read(json).getOrElse {
-        JsError(s"Unable to determine which type to use for typeName '${json \ "type" toOption}'. Did you forget to manually add it to the list of serializers?")
+        JsError(s"Unable to determine which type to use for $fieldName '${json \ fieldName toOption}'. Did you forget to manually add it to the list of serializers?")
       }
 
     override def writes(o: T): JsObject =
