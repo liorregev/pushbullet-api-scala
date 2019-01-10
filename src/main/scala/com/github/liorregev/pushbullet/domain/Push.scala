@@ -101,9 +101,6 @@ final case class PushListRequest(active: Option[Boolean], cursor: Option[String]
   override def params: Map[String, String] = super.params ++ Seq(active.map("active" -> _.toString)).flatten
   override def toJson: JsObject = Json.writes[PushListRequest].writes(this)
 }
-object PushListRequest {
-  implicit val format: OFormat[PushListRequest] = Json.format
-}
 
 sealed trait PushTarget extends Product with Serializable
 object PushTarget {
@@ -145,23 +142,10 @@ final case class CreatePushRequest(pushTarget: PushTarget, pushData: PushData) e
   override val objName: String = "pushes"
   override def toJson: JsObject = Json.writes[CreatePushRequest].writes(this)
 }
-object CreatePushRequest {
-  implicit val format: OFormat[CreatePushRequest] = new OFormat[CreatePushRequest] {
-    override def reads(json: JsValue): JsResult[CreatePushRequest] = for {
-      pushData <- json.validate[PushData]
-      pushTarget <- json.validate[PushTarget]
-    } yield CreatePushRequest(pushTarget, pushData)
-
-    override def writes(o: CreatePushRequest): JsObject = Json.toJsObject(o.pushData) ++ Json.toJsObject(o.pushTarget)
-  }
-}
 
 final case class DeletePushRequest(iden: Iden) extends DeleteRequest[Push] {
   override val objName: String = "pushes"
   override lazy val toJson: JsObject = Json.writes[DeletePushRequest].writes(this)
-}
-object DeletePushRequest {
-  implicit val format: OFormat[DeletePushRequest] = Json.format
 }
 
 final case class UpdatePushResponse(push: Push) extends UpdateResponse[Push] {
@@ -171,7 +155,4 @@ final case class UpdatePushRequest(iden: SingleItem, dismissed: Boolean) extends
   override val responseReads: Reads[UpdatePushResponse] = (json: JsValue) => Push.format.reads(json).map(UpdatePushResponse)
   override val objName: String = "pushes"
   override lazy val toJson: JsObject = snakeCaseFormat(Json.format[UpdatePushRequest]).writes(this)
-}
-object UpdatePushRequest {
-  implicit val format: OFormat[UpdatePushRequest] = Json.format
 }

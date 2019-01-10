@@ -76,6 +76,9 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
       case Operation.List(params) =>
         baseRequest
           .withUri(baseUrl.withPath(baseUrl.path / req.objName).withQuery(Uri.Query(params)))
+      case Operation.Get(what) =>
+        baseRequest
+          .withUri(baseUrl.withPath(baseUrl.path / req.objName / what))
     }
     http.singleRequest(finalRequest)
   }

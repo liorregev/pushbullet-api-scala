@@ -46,9 +46,6 @@ final case class SubscriptionListRequest(cursor: Option[String] = None) extends 
   override def toJson: JsObject = Json.writes[SubscriptionListRequest].writes(this)
   override val modifiedAfter: Option[Instant] = None
 }
-object SubscriptionListRequest {
-  implicit val format: OFormat[SubscriptionListRequest] = Json.format
-}
 
 final case class CreateSubscriptionResponse(subscription: Subscription) extends CreateResponse[Subscription] {
   override val result: Subscription = subscription
@@ -58,16 +55,10 @@ final case class CreateSubscriptionRequest(channelTag: String) extends CreateReq
   override val objName: String = "subscriptions"
   override def toJson: JsObject = Json.writes[CreateSubscriptionRequest].writes(this)
 }
-object CreateSubscriptionRequest {
-  implicit val format: OFormat[CreateSubscriptionRequest] = snakeCaseFormat(Json.format)
-}
 
 final case class DeleteSubscriptionRequest(iden: SingleItem) extends DeleteRequest[Subscription] {
   override val objName: String = "subscriptions"
   override lazy val toJson: JsObject = Json.writes[DeleteSubscriptionRequest].writes(this)
-}
-object DeleteSubscriptionRequest {
-  implicit val format: OFormat[DeleteSubscriptionRequest] = Json.format
 }
 
 final case class UpdateSubscriptionResponse(subscription: Subscription) extends UpdateResponse[Subscription] {
@@ -77,7 +68,4 @@ final case class UpdateSubscriptionRequest(iden: SingleItem, muted: Boolean) ext
   override val responseReads: Reads[UpdateSubscriptionResponse] = (json: JsValue) => Subscription.format.reads(json).map(UpdateSubscriptionResponse)
   override val objName: String = "subscriptions"
   override lazy val toJson: JsObject = Json.writes[UpdateSubscriptionRequest].writes(this)
-}
-object UpdateSubscriptionRequest {
-  implicit val format: OFormat[UpdateSubscriptionRequest] = Json.format
 }

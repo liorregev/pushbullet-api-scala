@@ -41,6 +41,9 @@ private[pushbullet] object Operation {
   final case class List(params: Map[String, String] = Map.empty) extends Operation {
     override val method: HttpMethod = HttpMethods.GET
   }
+  final case class Get(what: String) extends Operation {
+    override val method: HttpMethod = HttpMethods.GET
+  }
 }
 
 private[pushbullet] trait Response[+Obj <: DomainObject] extends Product with Serializable
