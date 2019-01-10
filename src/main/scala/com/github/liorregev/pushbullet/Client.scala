@@ -24,8 +24,8 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
   private lazy val logger = loggerFactory.getLogger(getClass)
   private lazy val http = Http()
 
-  def request[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp])
-                                                         (implicit ec: ExecutionContext): Future[Either[ClientError, Resp]] = {
+  final def request[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp])
+                                                               (implicit ec: ExecutionContext): Future[Either[ClientError, Resp]] = {
     logger.info(s"Processing $req")
     runRequest(req)
       .flatMap {

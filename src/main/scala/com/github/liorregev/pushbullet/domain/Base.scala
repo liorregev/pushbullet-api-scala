@@ -10,25 +10,25 @@ object DomainObjectBaseInfo {
   implicit val format: OFormat[DomainObjectBaseInfo] = Json.format
 }
 
-trait DomainObject extends Product with Serializable {
+private[pushbullet] trait DomainObject extends Product with Serializable {
   def name: String
   def baseInfo: DomainObjectBaseInfo
   def isActive: Boolean
 }
 
-trait ActiveDomainObject extends DomainObject { thisObject =>
+private[domain] trait ActiveDomainObject extends DomainObject { thisObject =>
   override final val isActive: Boolean = true
 }
 
-trait InactiveDomainObject extends DomainObject { thisObject =>
+private[domain] trait InactiveDomainObject extends DomainObject { thisObject =>
   override final val isActive: Boolean = false
 }
 
-sealed trait Operation {
+private[pushbullet] sealed trait Operation {
   def method: HttpMethod
 }
 
-object Operation {
+private[pushbullet] object Operation {
   case object Create extends Operation {
     override val method: HttpMethod = HttpMethods.POST
   }
@@ -43,20 +43,20 @@ object Operation {
   }
 }
 
-trait Response[+Obj <: DomainObject] extends Product with Serializable
+private[pushbullet] trait Response[+Obj <: DomainObject] extends Product with Serializable
 
-trait Request[Obj <: DomainObject, Resp <: Response[Obj]] extends Product with Serializable {
+private[pushbullet] trait Request[Obj <: DomainObject, Resp <: Response[Obj]] extends Product with Serializable {
   def op: Operation
   def responseReads: Reads[Resp]
   def objName: String
   def toJson: JsObject
 }
 
-trait ListResponse[Obj <: DomainObject] extends Response[Obj] {
+private[domain] trait ListResponse[Obj <: DomainObject] extends Response[Obj] {
   def results: Seq[Obj]
   def cursor: Option[String]
 }
-trait ListRequest[Obj <: DomainObject, Resp <: ListResponse[Obj]] extends Request[Obj, Resp] {
+private[domain] trait ListRequest[Obj <: DomainObject, Resp <: ListResponse[Obj]] extends Request[Obj, Resp] {
   def cursor: Option[String]
   def modifiedAfter: Option[Instant]
   def params: Map[String, String] = Map.empty
@@ -66,24 +66,24 @@ trait ListRequest[Obj <: DomainObject, Resp <: ListResponse[Obj]] extends Reques
   ).flatten)
 }
 
-trait CreateResponse[Obj <: DomainObject] extends Response[Obj] {
+private[domain] trait CreateResponse[Obj <: DomainObject] extends Response[Obj] {
   def result: Obj
 }
-trait CreateRequest[Obj <: DomainObject, Resp <: CreateResponse[Obj]] extends Request[Obj, Resp] {
+private[domain] trait CreateRequest[Obj <: DomainObject, Resp <: CreateResponse[Obj]] extends Request[Obj, Resp] {
   override final val op: Operation = Operation.Create
 }
 
 case object DeleteResponse extends Response[Nothing]
-trait DeleteRequest[Obj <: DomainObject] extends Request[Obj, DeleteResponse.type] {
+private[domain] trait DeleteRequest[Obj <: DomainObject] extends Request[Obj, DeleteResponse.type] {
   def iden: Iden
   override final val op: Operation = Operation.Delete(iden)
   override final val responseReads: Reads[DeleteResponse.type] = _ => JsSuccess(DeleteResponse)
 }
 
-trait UpdateResponse[Obj <: DomainObject] extends Response[Obj] {
+private[domain] trait UpdateResponse[Obj <: DomainObject] extends Response[Obj] {
   def result: Obj
 }
-trait UpdateRequest[Obj <: DomainObject, Resp <: UpdateResponse[Obj]] extends Request[Obj, Resp] {
+private[domain] trait UpdateRequest[Obj <: DomainObject, Resp <: UpdateResponse[Obj]] extends Request[Obj, Resp] {
   def iden: SingleItem
   override final val op: Operation = Operation.Update(iden)
 }
