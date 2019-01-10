@@ -2,7 +2,6 @@ package com.github.liorregev.pushbullet.domain
 
 import java.time.Instant
 
-import akka.http.scaladsl.model.ContentType
 import cats.data.NonEmptyList
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
@@ -103,7 +102,7 @@ final case class PushListRequest(active: Option[Boolean], cursor: Option[String]
   override def toJson: JsObject = Json.writes[PushListRequest].writes(this)
 }
 object PushListRequest {
-  implicit val format: OFormat[PushListRequest] = Json.format[PushListRequest]
+  implicit val format: OFormat[PushListRequest] = Json.format
 }
 
 sealed trait PushTarget extends Product with Serializable
@@ -162,7 +161,7 @@ final case class DeletePushRequest(iden: Iden) extends DeleteRequest[Push] {
   override lazy val toJson: JsObject = Json.writes[DeletePushRequest].writes(this)
 }
 object DeletePushRequest {
-  implicit val format: OFormat[DeletePushRequest] = Json.format[DeletePushRequest]
+  implicit val format: OFormat[DeletePushRequest] = Json.format
 }
 
 final case class UpdatePushResponse(push: Push) extends UpdateResponse[Push] {
@@ -174,5 +173,5 @@ final case class UpdatePushRequest(iden: SingleItem, dismissed: Boolean) extends
   override lazy val toJson: JsObject = snakeCaseFormat(Json.format[UpdatePushRequest]).writes(this)
 }
 object UpdatePushRequest {
-  implicit val format: OFormat[UpdatePushRequest] = Json.format[UpdatePushRequest]
+  implicit val format: OFormat[UpdatePushRequest] = Json.format
 }

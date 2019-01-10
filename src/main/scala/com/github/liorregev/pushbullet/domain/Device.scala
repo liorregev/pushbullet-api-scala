@@ -29,7 +29,7 @@ final case class DeviceListRequest(cursor: Option[String] = None, modifiedAfter:
   override def toJson: JsObject = Json.writes[DeviceListRequest].writes(this)
 }
 object DeviceListRequest {
-  implicit val format: OFormat[DeviceListRequest] = Json.format[DeviceListRequest]
+  implicit val format: OFormat[DeviceListRequest] = Json.format
 }
 
 final case class CreateDeviceResponse(device: Device) extends CreateResponse[Device] {
@@ -41,7 +41,7 @@ final case class CreateDeviceRequest(email: String) extends CreateRequest[Device
   override def toJson: JsObject = Json.writes[CreateDeviceRequest].writes(this)
 }
 object CreateDeviceRequest {
-  implicit val format: OFormat[CreateDeviceRequest] = Json.format[CreateDeviceRequest]
+  implicit val format: OFormat[CreateDeviceRequest] = Json.format
 }
 
 final case class DeleteDeviceRequest(iden: SingleItem) extends DeleteRequest[Device] {
@@ -49,7 +49,7 @@ final case class DeleteDeviceRequest(iden: SingleItem) extends DeleteRequest[Dev
   override lazy val toJson: JsObject = Json.writes[DeleteDeviceRequest].writes(this)
 }
 object DeleteDeviceRequest {
-  implicit val format: OFormat[DeleteDeviceRequest] = Json.format[DeleteDeviceRequest]
+  implicit val format: OFormat[DeleteDeviceRequest] = Json.format
 }
 
 final case class UpdateDeviceResponse(device: Device) extends UpdateResponse[Device] {
@@ -61,5 +61,5 @@ final case class UpdateDeviceRequest(iden: SingleItem, nickname: String, model: 
   override lazy val toJson: JsObject = snakeCaseFormat(Json.format[UpdateDeviceRequest]).writes(this)
 }
 object UpdateDeviceRequest {
-  implicit val format: OFormat[UpdateDeviceRequest] = Json.format[UpdateDeviceRequest]
+  implicit val format: OFormat[UpdateDeviceRequest] = Json.format
 }
