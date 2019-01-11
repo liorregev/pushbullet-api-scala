@@ -30,7 +30,7 @@ class ListenerTest extends FunSuite with Matchers {
       override def onPush(push: Push): Unit = push match {
         case active: ActivePush =>
           if(active.baseInfo.created equals active.baseInfo.modified) {
-            println(s"New push with body: ${active.pushData.body}")
+            println(s"New push with body: ${active.pushData.body} and modified at ${active.baseInfo.modified}")
             client.request(UpdatePushRequest(active.baseInfo.iden, dismissed = true))
           } else {
             println(s"Push with iden ${push.baseInfo.iden} is now dismissed")

@@ -5,18 +5,22 @@ import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 
 import scala.collection.mutable
 
-class SplitJunction extends GraphStage[FanOutShape3[Either[ListenerError, ProtoMessage], Nop.type, NewPush, Tickle]] {
+class SplitJunction
+  extends GraphStage[FanOutShape4[Either[ListenerError, ProtoMessage], Nop.type, NewPush, Tickle, ListenerError]] {
+
   val in: Inlet[Either[ListenerError, ProtoMessage]] = Inlet[Either[ListenerError, ProtoMessage]]("Split.in")
   val nopOut: Outlet[Nop.type] = Outlet[Nop.type]("Split.NopOut")
   val pushOut: Outlet[NewPush] = Outlet[NewPush]("Split.NewPushOut")
   val tickleOut: Outlet[Tickle] = Outlet[Tickle]("Split.TickleOut")
-//  val errorOut: Outlet[ListenerError] = Outlet[ListenerError]("Split.ErrorOut")
+  val errorOut: Outlet[ListenerError] = Outlet[ListenerError]("Split.ErrorOut")
 
   override def createLogic(attr: Attributes): GraphStageLogic =
     new GraphStageLogic(shape) {
       private val nopQueue = mutable.Queue[Nop.type]()
       private val pushQueue = mutable.Queue[NewPush]()
       private val tickleQueue = mutable.Queue[Tickle]()
+      private val errorQueue = mutable.Queue[ListenerError]()
+
       case class MessageOutHandler[T](outlet: Outlet[T], queue: mutable.Queue[T]) extends  OutHandler {
         override def onPull(): Unit = {
           if(queue.nonEmpty)
@@ -39,14 +43,15 @@ class SplitJunction extends GraphStage[FanOutShape3[Either[ListenerError, ProtoM
             case Right(Nop) => handleMessage(nopOut, nopQueue)(Nop)
             case Right(tickle: Tickle) => handleMessage(tickleOut, tickleQueue)(tickle)
             case Right(newPush: NewPush) => handleMessage(pushOut, pushQueue)(newPush)
-            case Left(_) =>
+            case Left(error) => handleMessage(errorOut, errorQueue)(error)
           }
         }
       })
       setHandler(nopOut, MessageOutHandler(nopOut, nopQueue))
       setHandler(pushOut, MessageOutHandler(pushOut, pushQueue))
       setHandler(tickleOut, MessageOutHandler(tickleOut, tickleQueue))
+      setHandler(errorOut, MessageOutHandler(errorOut, errorQueue))
     }
-  override val shape: FanOutShape3[Either[ListenerError, ProtoMessage], Nop.type, NewPush, Tickle] =
-    new FanOutShape3(in, nopOut, pushOut, tickleOut)
+  override val shape: FanOutShape4[Either[ListenerError, ProtoMessage], Nop.type, NewPush, Tickle, ListenerError] =
+    new FanOutShape4(in, nopOut, pushOut, tickleOut, errorOut)
 }

@@ -48,11 +48,13 @@ object TickleSubtype {
 }
 final case class Tickle(subtype: TickleSubtype) extends ProtoMessage
 
-trait Handler extends PushHandler with DeviceHandler
+trait Handler extends PushHandler with DeviceHandler with EphemeralPushHandler with ErrorHandler
 
 trait NopHandler extends Handler {
+  override def onEphemeralPush(push: Push): Unit = {}
   override def onPush(push: Push): Unit = {}
   override def onDevice(device: Device): Unit = {}
+  override def onError(error: ListenerError): Unit = {}
 }
 
 sealed trait ListenerError extends Product with Serializable
@@ -61,23 +63,31 @@ case object InvalidMessageType extends ListenerError
 
 class Listener(client: pushbullet.Client, handler: Handler)
               (implicit loggerFactory: LoggerContext, ec: ExecutionContext) {
-  val processGraph: Graph[FlowShape[Message, ProtoMessage], NotUsed] = GraphDSL.create() { implicit builder: GraphDSL.Builder[NotUsed] =>
-    import GraphDSL.Implicits._
+  val processGraph: Graph[FlowShape[Message, Either[ListenerError, ProtoMessage]], NotUsed] =
+    GraphDSL.create() { implicit builder: GraphDSL.Builder[NotUsed] =>
+      import GraphDSL.Implicits._
 
-    val parse = builder.add(new MapStage[Message, Either[ListenerError, ProtoMessage]]({
-      case text: TextMessage.Strict => Json.parse(text.text).validate[ProtoMessage].asEither.leftMap(errors => ParseError(JsError(errors)))
-      case _ => InvalidMessageType.asLeft[ProtoMessage]
-    }))
-    val split = builder.add(new SplitJunction())
-    val nopProcessor = builder.add(new NopProcessor())
-    val tickleProcessor = builder.add(new TickleProcessor(client, handler, handler))
-    val merge = builder.add(Merge[ProtoMessage](3))
+      val parse = builder.add(new MapStage[Message, Either[ListenerError, ProtoMessage]]({
+        case text: TextMessage.Strict => Json.parse(text.text).validate[ProtoMessage].asEither.leftMap(errors => ParseError(JsError(errors)))
+        case _ => InvalidMessageType.asLeft[ProtoMessage]
+      }))
+      val split = builder.add(new SplitJunction())
+      val nopProcessor = builder.add(new NopProcessor())
+      val tickleProcessor = builder.add(new TickleProcessor(client, handler, handler))
+      val ephemeralPushProcessor = builder.add(new NewPushProcessor(handler))
+      val errorProcessor = builder.add(new ErrorProcessor(handler))
+      val mergeProtos = builder.add(Merge[ProtoMessage](3))
+      val merge = builder.add(Merge[Either[ListenerError, ProtoMessage]](2))
+      val protoToEither = builder.add(new MapStage[ProtoMessage, Either[ListenerError, ProtoMessage]](_.asRight[ListenerError]))
+      val errorToEither = builder.add(new MapStage[ListenerError, Either[ListenerError, ProtoMessage]](_.asLeft[ProtoMessage]))
 
-    parse.out ~> split.in
-    split.out0 ~> nopProcessor ~> merge
-    split.out1 ~> merge
-    split.out2 ~> tickleProcessor ~> merge
+      parse.out ~> split.in
+      split.out0 ~> nopProcessor ~> mergeProtos
+      split.out1 ~> ephemeralPushProcessor ~> mergeProtos
+      split.out2 ~> tickleProcessor ~> mergeProtos
+      split.out3 ~> errorProcessor ~> errorToEither ~> merge
+      mergeProtos ~> protoToEither ~> merge
 
-    FlowShape(parse.in, merge.out)
-  }
+      FlowShape(parse.in, merge.out)
+    }
 }

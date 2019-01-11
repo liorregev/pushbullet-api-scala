@@ -12,13 +12,14 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 trait PushHandler { def onPush(push: Push): Unit }
 trait DeviceHandler { def onDevice(device: Device): Unit }
+
 class TickleProcessor(client: pushbullet.Client, pushHandler: PushHandler, deviceHandler: DeviceHandler)
                      (implicit loggerFactory: LoggerContext, ec: ExecutionContext)
   extends GraphStage[FlowShape[Tickle, Tickle]]{
 
   private val logger = loggerFactory.getLogger(this.getClass)
-  val in: Inlet[Tickle] = Inlet("NopSink.In")
-  val out: Outlet[Tickle] = Outlet("NopSink.Out")
+  val in: Inlet[Tickle] = Inlet("TickleProcessor.In")
+  val out: Outlet[Tickle] = Outlet("TickleProcessor.Out")
   override val shape: FlowShape[Tickle, Tickle] = FlowShape.of(in, out)
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
     @SuppressWarnings(Array("org.wartremover.warts.Var"))
@@ -34,7 +35,9 @@ class TickleProcessor(client: pushbullet.Client, pushHandler: PushHandler, devic
             lastFetchedDevices = push.baseInfo.modified
           })
           Future.successful(())
-        case _ => fetchInitialTimes()
+        case Left(error) =>
+          logger.error(s"Could not load times: $error")
+          fetchInitialTimes()
       }
 
     private val updateTimesFuture = fetchInitialTimes()
@@ -44,23 +47,29 @@ class TickleProcessor(client: pushbullet.Client, pushHandler: PushHandler, devic
         val fetchingTs = Instant.ofEpochMilli(lastFetchedPushes.toEpochMilli)
         client.request(PushListRequest(modifiedAfter = Option(fetchingTs))).andThen {
           case Success(Right(PushListResponse(pushes, _))) =>
-            pushes
-              .filter(_.baseInfo.modified.isAfter(fetchingTs))
+            val filteredPushes = pushes.filter(_.baseInfo.modified.isAfter(fetchingTs))
+            filteredPushes
+              .map(_.baseInfo.modified)
+              .reduceOption(implicitly[Ordering[Instant]].max)
+              .foreach(lastFetchedPushes = _)
+            filteredPushes
               .foreach(pushHandler.onPush)
           case error =>
             println(error)
         }
-        lastFetchedPushes = Instant.now
       case Tickle(TickleSubtype.Device) =>
         val fetchingTs = Instant.ofEpochMilli(lastFetchedDevices.toEpochMilli)
         client.request(DeviceListRequest(modifiedAfter = Option(fetchingTs))).foreach {
           case Right(DeviceListResponse(devices, _)) =>
-            devices
-              .filter(_.baseInfo.modified.isAfter(fetchingTs))
+            val filteredDevices = devices.filter(_.baseInfo.modified.isAfter(fetchingTs))
+            filteredDevices
+              .map(_.baseInfo.modified)
+              .reduceOption(implicitly[Ordering[Instant]].max)
+              .foreach(lastFetchedDevices = _)
+            filteredDevices
               .foreach(deviceHandler.onDevice)
           case _ =>
         }
-        lastFetchedDevices = Instant.now
     }
 
     setHandler(in, new InHandler {

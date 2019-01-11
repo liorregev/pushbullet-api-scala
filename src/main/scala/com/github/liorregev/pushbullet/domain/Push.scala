@@ -109,7 +109,7 @@ object PushDirection {
   )
 }
 
-final case class PartyInfo(iden: SingleItem, email: String, emailNormalized: String, name: Option[String])
+final case class PartyInfo(iden: SingleItem, email: Option[String], emailNormalized: Option[String], name: Option[String])
 object PartyInfo {
   implicit val format: OFormat[PartyInfo] = snakeCaseFormat(Json.format)
 }
