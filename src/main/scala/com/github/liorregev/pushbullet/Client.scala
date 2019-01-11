@@ -33,9 +33,10 @@ object UploadFileResponse {
   implicit val format: OFormat[UploadFileResponse] = snakeCaseFormat(Json.format)
 }
 
-class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerFactory: LoggerContext, materializer: ActorMaterializer) {
+class Client(apiKey: String)(implicit system: ActorSystem, loggerFactory: LoggerContext, materializer: ActorMaterializer) {
   private lazy val logger = loggerFactory.getLogger(getClass)
   private lazy val http = Http()
+  private val baseUrl = Uri("https://api.pushbullet.com/v2")
 
   final def request[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp])
                                                                (implicit ec: ExecutionContext): Future[Either[ClientError, Resp]] = {
