@@ -3,19 +3,19 @@ package com.github.liorregev.pushbullet
 import java.io.File
 import java.nio.file.Files
 
-import akka.NotUsed
+import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.model.ws.{Message, WebSocketRequest, WebSocketUpgradeResponse}
+import akka.http.scaladsl.model.ws.WebSocketRequest
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.ByteString
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
 import com.github.liorregev.pushbullet.domain.{AllItems, DomainObject, Operation, Request, Response, SingleItem}
-import com.github.liorregev.pushbullet.listener.Listener
+import com.github.liorregev.pushbullet.listener.{Handler, Listener}
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
 
@@ -64,10 +64,7 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
 
   private def runRequest[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp]): Future[HttpResponse] = {
     val baseRequest = HttpRequest()
-      .withHeaders(
-        RawHeader("Access-Token", apiKey),
-        `Content-Type`(ContentTypes.`application/json`),
-      )
+      .withHeaders(RawHeader("Access-Token", apiKey))
       .withMethod(req.op.method)
 
     val finalRequest = req.op match {
@@ -102,10 +99,7 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
       "file_type" -> JsString(fileType.toString)
     )
     val request = HttpRequest()
-      .withHeaders(
-        RawHeader("Access-Token", apiKey),
-        `Content-Type`(ContentTypes.`application/json`),
-      )
+      .withHeaders(RawHeader("Access-Token", apiKey))
       .withEntity(HttpEntity(ContentTypes.`application/json`, JsObject(requestData).toString))
       .withUri(baseUrl.withPath(baseUrl.path / "upload-request"))
       .withMethod(HttpMethods.POST)
@@ -166,10 +160,17 @@ class Client(baseUrl: Uri, apiKey: String)(implicit system: ActorSystem, loggerF
       }
   }
 
-  def startListening(): (Future[WebSocketUpgradeResponse], NotUsed) = {
-    val listener = new Listener()
-    val sink = Sink.fromGraph(listener.processGraph)
+  def startListening(handler: Handler)(implicit ec: ExecutionContext): (() => Unit, Future[Done]) = {
+    val listener = new Listener(this, handler)
+    val flow = Flow.fromGraph(listener.processGraph)
+
     val webSocketFlow = http.webSocketClientFlow(WebSocketRequest(s"wss://stream.pushbullet.com/websocket/$apiKey"))
-    Source.maybe.viaMat(webSocketFlow)(Keep.right).toMat(sink)(Keep.both).run()
+    val (finishPromise, done) = Source.maybe
+      .viaMat(webSocketFlow)(Keep.left)
+      .viaMat(flow)(Keep.left)
+      .toMat(Sink.ignore)(Keep.both)
+      .run()
+    val stopListening: () => Unit = () => finishPromise.success(None)
+    (stopListening, done)
   }
 }

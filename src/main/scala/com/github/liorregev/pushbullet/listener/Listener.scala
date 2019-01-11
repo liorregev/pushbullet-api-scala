@@ -1,15 +1,17 @@
 package com.github.liorregev.pushbullet.listener
 
 import akka.NotUsed
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.stream._
 import akka.stream.scaladsl._
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
-import com.github.liorregev.pushbullet.domain.Push
+import com.github.liorregev.pushbullet
+import com.github.liorregev.pushbullet.domain.{Device, Push}
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json.{JsResult, _}
+
+import scala.concurrent.ExecutionContext
 
 
 sealed trait ProtoMessage extends Product with Serializable
@@ -46,28 +48,36 @@ object TickleSubtype {
 }
 final case class Tickle(subtype: TickleSubtype) extends ProtoMessage
 
-trait Handler {
-  def onPush(push: Push): Unit
+trait Handler extends PushHandler with DeviceHandler
+
+trait NopHandler extends Handler {
+  override def onPush(push: Push): Unit = {}
+  override def onDevice(device: Device): Unit = {}
 }
 
 sealed trait ListenerError extends Product with Serializable
 final case class ParseError(jsError: JsError) extends ListenerError
 case object InvalidMessageType extends ListenerError
 
-class Listener()(implicit system: ActorSystem, loggerFactory: LoggerContext, materializer: ActorMaterializer) {
-
-  val processGraph: Graph[SinkShape[Message], NotUsed] = GraphDSL.create() { implicit builder: GraphDSL.Builder[NotUsed] =>
+class Listener(client: pushbullet.Client, handler: Handler)
+              (implicit loggerFactory: LoggerContext, ec: ExecutionContext) {
+  val processGraph: Graph[FlowShape[Message, ProtoMessage], NotUsed] = GraphDSL.create() { implicit builder: GraphDSL.Builder[NotUsed] =>
     import GraphDSL.Implicits._
 
-    val parse = new MapStage[Message, Either[ListenerError, ProtoMessage]]({
+    val parse = builder.add(new MapStage[Message, Either[ListenerError, ProtoMessage]]({
       case text: TextMessage.Strict => Json.parse(text.text).validate[ProtoMessage].asEither.leftMap(errors => ParseError(JsError(errors)))
       case _ => InvalidMessageType.asLeft[ProtoMessage]
-    })
-    val nopSink = new NopSink()
-
+    }))
     val split = builder.add(new SplitJunction())
+    val nopProcessor = builder.add(new NopProcessor())
+    val tickleProcessor = builder.add(new TickleProcessor(client, handler, handler))
+    val merge = builder.add(Merge[ProtoMessage](3))
+
     parse.out ~> split.in
-    split.out0 ~> nopSink
-    SinkShape.of(parse.in)
+    split.out0 ~> nopProcessor ~> merge
+    split.out1 ~> merge
+    split.out2 ~> tickleProcessor ~> merge
+
+    FlowShape(parse.in, merge.out)
   }
 }

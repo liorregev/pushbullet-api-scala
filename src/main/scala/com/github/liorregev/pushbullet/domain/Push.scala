@@ -121,10 +121,10 @@ final case class ActivePush(baseInfo: DomainObjectBaseInfo, pushData: PushData, 
                             clientIden: Option[SingleItem], channelIden: Option[SingleItem])
   extends Push with ActiveDomainObject
 
-final case class PushListResponse(devices: Seq[Push], cursor: Option[String]) extends ListResponse[Push] {
-  override val results: Seq[Push] = devices
+final case class PushListResponse(pushes: Seq[Push], cursor: Option[String]) extends ListResponse[Push] {
+  override val results: Seq[Push] = pushes
 }
-final case class PushListRequest(active: Option[Boolean], cursor: Option[String] = None,
+final case class PushListRequest(active: Option[Boolean] = None, cursor: Option[String] = None,
                                  modifiedAfter: Option[Instant]= None) extends ListRequest[Push, PushListResponse] {
   override val responseReads: Reads[PushListResponse] = Json.reads[PushListResponse]
   override val objName: String = "pushes"
