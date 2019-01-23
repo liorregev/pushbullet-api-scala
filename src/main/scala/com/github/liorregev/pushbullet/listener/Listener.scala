@@ -11,7 +11,8 @@ import com.github.liorregev.pushbullet.domain.{Device, Push}
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json.{JsResult, _}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, TimeoutException}
+import scala.concurrent.duration._
 
 
 sealed trait ProtoMessage extends Product with Serializable
@@ -60,14 +61,17 @@ trait NopHandler extends Handler {
 sealed trait ListenerError extends Product with Serializable
 final case class ParseError(jsError: JsError) extends ListenerError
 case object InvalidMessageType extends ListenerError
+case object DeadConnection extends ListenerError
 
 class Listener(client: pushbullet.Client, handler: Handler)
               (implicit loggerFactory: LoggerContext, ec: ExecutionContext) {
-  val processGraph: Graph[FlowShape[Message, Either[ListenerError, ProtoMessage]], NotUsed] =
+  type CombinedMessage = Either[ListenerError, ProtoMessage]
+
+  val processGraph: Graph[FlowShape[Message, CombinedMessage], NotUsed] =
     GraphDSL.create() { implicit builder: GraphDSL.Builder[NotUsed] =>
       import GraphDSL.Implicits._
 
-      val parse = builder.add(new MapStage[Message, Either[ListenerError, ProtoMessage]]({
+      val parse = builder.add(new MapStage[Message, CombinedMessage]({
         case text: TextMessage.Strict => Json.parse(text.text).validate[ProtoMessage].asEither.leftMap(errors => ParseError(JsError(errors)))
         case _ => InvalidMessageType.asLeft[ProtoMessage]
       }))
@@ -77,17 +81,23 @@ class Listener(client: pushbullet.Client, handler: Handler)
       val ephemeralPushProcessor = builder.add(new NewPushProcessor(handler))
       val errorProcessor = builder.add(new ErrorProcessor(handler))
       val mergeProtos = builder.add(Merge[ProtoMessage](3))
-      val merge = builder.add(Merge[Either[ListenerError, ProtoMessage]](2))
-      val protoToEither = builder.add(new MapStage[ProtoMessage, Either[ListenerError, ProtoMessage]](_.asRight[ListenerError]))
-      val errorToEither = builder.add(new MapStage[ListenerError, Either[ListenerError, ProtoMessage]](_.asLeft[ProtoMessage]))
+      val merge = builder.add(Merge[CombinedMessage](2))
+      val protoToEither = builder.add(new MapStage[ProtoMessage, CombinedMessage](_.asRight[ListenerError]))
+      val errorToEither = builder.add(new MapStage[ListenerError, CombinedMessage](_.asLeft[ProtoMessage]))
+      val timedStopper = builder.add(
+        Flow[CombinedMessage]
+          .idleTimeout(1 minute)
+          .recoverWithRetries(1, {
+            case _: TimeoutException => Source.single(DeadConnection.asLeft[ProtoMessage])
+          }))
 
       parse.out ~> split.in
       split.out0 ~> nopProcessor ~> mergeProtos
       split.out1 ~> ephemeralPushProcessor ~> mergeProtos
       split.out2 ~> tickleProcessor ~> mergeProtos
       split.out3 ~> errorProcessor ~> errorToEither ~> merge
-      mergeProtos ~> protoToEither ~> merge
+      mergeProtos ~> protoToEither ~> merge ~> timedStopper
 
-      FlowShape(parse.in, merge.out)
+      FlowShape(parse.in, timedStopper.out)
     }
 }

@@ -27,17 +27,10 @@ class TickleProcessor(client: pushbullet.Client, pushHandler: PushHandler, devic
     @SuppressWarnings(Array("org.wartremover.warts.Var"))
     private var lastFetchedDevices = Instant.ofEpochMilli(0)
 
-    private def fetchInitialTimes(): Future[Unit] = client.request(PushListRequest())
-      .flatMap {
-        case Right(PushListResponse(pushes, _)) =>
-          pushes.headOption.foreach(push => {
-            lastFetchedPushes = push.baseInfo.modified
-            lastFetchedDevices = push.baseInfo.modified
-          })
-          Future.successful(())
-        case Left(error) =>
-          logger.error(s"Could not load times: $error")
-          fetchInitialTimes()
+    private def fetchInitialTimes(): Future[Unit] = client.loadLatestServerTime()
+      .map { time =>
+        lastFetchedPushes = time
+        lastFetchedDevices = time
       }
 
     private val updateTimesFuture = fetchInitialTimes()

@@ -1,20 +1,22 @@
 package com.github.liorregev.pushbullet
 
+import java.time.Instant
 import java.util.concurrent.TimeoutException
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl._
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
 import com.github.liorregev.pushbullet.domain.{ActivePush, CreatePushRequest, InactivePush, Push, PushData, PushTarget, UpdatePushRequest}
-import com.github.liorregev.pushbullet.listener.NopHandler
-import org.scalatest.{FunSuite, Matchers}
+import com.github.liorregev.pushbullet.listener.{DeadConnection, Listener, NopHandler}
+import org.scalatest.{EitherValues, FunSuite, Matchers}
 
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 
-class ListenerTest extends FunSuite with Matchers {
+class ListenerTest extends FunSuite with Matchers with EitherValues {
   implicit lazy val loggerFactory: LoggerContext = {
     val loggerContext = new LoggerContext()
     val contextInitializer = new ContextInitializer(loggerContext)
@@ -52,5 +54,20 @@ class ListenerTest extends FunSuite with Matchers {
         stop()
         Await.result(closed, 15 seconds)
     }
+  }
+
+  test("No messages") {
+    class TestClient() extends Client("") {
+      override def loadLatestServerTime()(implicit ec: ExecutionContext): Future[Instant] =
+        Future.successful(Instant.now())
+    }
+
+    val listener = new Listener(new TestClient(), new NopHandler {})
+    val flow = Flow.fromGraph(listener.processGraph)
+    val (_, done) = Source.maybe.viaMat(flow)(Keep.left)
+      .toMat(Sink.last)(Keep.both)
+      .run()
+    val result = Await.result(done, 2 minutes)
+    result.left.value should be (DeadConnection)
   }
 }

@@ -2,8 +2,8 @@ package com.github.liorregev.pushbullet
 
 import java.io.File
 import java.nio.file.Files
+import java.time.Instant
 
-import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
@@ -14,11 +14,12 @@ import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.ByteString
 import cats.syntax.either._
 import ch.qos.logback.classic.LoggerContext
-import com.github.liorregev.pushbullet.domain.{AllItems, DomainObject, Operation, Request, Response, SingleItem}
-import com.github.liorregev.pushbullet.listener.{Handler, Listener}
+import com.github.liorregev.pushbullet.domain.{AllItems, DomainObject, Operation, PushListRequest, Request, Response, SingleItem}
+import com.github.liorregev.pushbullet.listener.{Handler, Listener, ListenerError, ProtoMessage}
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 sealed trait ClientError
@@ -62,6 +63,10 @@ class Client(apiKey: String)(implicit system: ActorSystem, loggerFactory: Logger
           } yield result
       }
   }
+
+  def loadLatestServerTime()(implicit ec: ExecutionContext): Future[Instant] = this.request(PushListRequest())
+    .flatMap(_.fold(_ => loadLatestServerTime(),
+      resp => Future.successful(resp.pushes.headOption.map(_.baseInfo.modified).getOrElse(Instant.now()))))
 
   private def runRequest[Obj <: DomainObject, Resp <: Response[Obj]](req: Request[Obj, Resp]): Future[HttpResponse] = {
     val baseRequest = HttpRequest()
@@ -161,7 +166,7 @@ class Client(apiKey: String)(implicit system: ActorSystem, loggerFactory: Logger
       }
   }
 
-  def startListening(handler: Handler)(implicit ec: ExecutionContext): (() => Unit, Future[Done]) = {
+  def startListening(handler: Handler)(implicit ec: ExecutionContext): (() => Unit, Future[Either[ListenerError, ProtoMessage]]) = {
     val listener = new Listener(this, handler)
     val flow = Flow.fromGraph(listener.processGraph)
 
@@ -169,7 +174,8 @@ class Client(apiKey: String)(implicit system: ActorSystem, loggerFactory: Logger
     val (finishPromise, done) = Source.maybe
       .viaMat(webSocketFlow)(Keep.left)
       .viaMat(flow)(Keep.left)
-      .toMat(Sink.ignore)(Keep.both)
+      .idleTimeout(1 minute)
+      .toMat(Sink.last)(Keep.both)
       .run()
     val stopListening: () => Unit = () => finishPromise.success(None)
     (stopListening, done)

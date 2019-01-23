@@ -43,6 +43,7 @@ class SplitJunction
             case Right(Nop) => handleMessage(nopOut, nopQueue)(Nop)
             case Right(tickle: Tickle) => handleMessage(tickleOut, tickleQueue)(tickle)
             case Right(newPush: NewPush) => handleMessage(pushOut, pushQueue)(newPush)
+            case Right(_) =>
             case Left(error) => handleMessage(errorOut, errorQueue)(error)
           }
         }

@@ -26,7 +26,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
 
   feature("Chats api") {
     val testEmail = "someEmail@someDomain.com"
-    val client = new Client("https://api.pushbullet.com/v2", "o.i8br1Q7KYE3IXHEPY01i7b1Qz2Z3Mz6j")
+    val client = new Client("o.i8br1Q7KYE3IXHEPY01i7b1Qz2Z3Mz6j")
     val testStart = client.request(ChatListRequest())
       .map(_.right.value)
       .map(_.chats.collect {
@@ -128,7 +128,7 @@ class ClientTest extends AsyncFeatureSpec with GivenWhenThen with Matchers with 
   }
 
   feature("Pushes api") {
-    val client = new Client("https://api.pushbullet.com/v2", "o.i8br1Q7KYE3IXHEPY01i7b1Qz2Z3Mz6j")
+    val client = new Client("o.i8br1Q7KYE3IXHEPY01i7b1Qz2Z3Mz6j")
     ignore("Pushing a file") {
       When("Requesting to list chats")
       val response = client.uploadFile("myPushedFile.png",
