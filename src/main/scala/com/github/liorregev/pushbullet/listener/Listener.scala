@@ -20,11 +20,13 @@ sealed trait ProtoMessage extends Product with Serializable
 object ProtoMessage {
   implicit val format: OFormat[ProtoMessage] = formatFor(
     "nop" -> Nop,
+    "reconnect" -> Reconnect,
     "push" -> Json.format[NewPush],
     "tickle" -> Json.format[Tickle]
   )
 }
 case object Nop  extends ProtoMessage
+case object Reconnect  extends ProtoMessage
 final case class NewPush(push: Push) extends ProtoMessage
 sealed trait TickleSubtype extends Product with Serializable
 object TickleSubtype {
@@ -63,6 +65,8 @@ final case class ParseError(jsError: JsError) extends ListenerError
 case object InvalidMessageType extends ListenerError
 case object DeadConnection extends ListenerError
 
+case object ReconnectError extends Exception
+
 class Listener(client: pushbullet.Client, handler: Handler)
               (implicit loggerFactory: LoggerContext, ec: ExecutionContext) {
   type CombinedMessage = Either[ListenerError, ProtoMessage]
@@ -76,12 +80,13 @@ class Listener(client: pushbullet.Client, handler: Handler)
         case _ => InvalidMessageType.asLeft[ProtoMessage]
       }))
       val split = builder.add(new SplitJunction())
+      val reconnectProcessor = builder.add(new ReconnectProcessor())
       val nopProcessor = builder.add(new NopProcessor())
       val tickleProcessor = builder.add(new TickleProcessor(client, handler, handler))
       val ephemeralPushProcessor = builder.add(new NewPushProcessor(handler))
       val errorProcessor = builder.add(new ErrorProcessor(handler))
-      val mergeProtos = builder.add(Merge[ProtoMessage](3))
-      val merge = builder.add(Merge[CombinedMessage](2))
+      val mergeProtos = builder.add(Merge[ProtoMessage](4))
+      val merge = builder.add(MergePreferred[CombinedMessage](1))
       val protoToEither = builder.add(new MapStage[ProtoMessage, CombinedMessage](_.asRight[ListenerError]))
       val errorToEither = builder.add(new MapStage[ListenerError, CombinedMessage](_.asLeft[ProtoMessage]))
       val timedStopper = builder.add(
@@ -95,8 +100,12 @@ class Listener(client: pushbullet.Client, handler: Handler)
       split.out0 ~> nopProcessor ~> mergeProtos
       split.out1 ~> ephemeralPushProcessor ~> mergeProtos
       split.out2 ~> tickleProcessor ~> mergeProtos
-      split.out3 ~> errorProcessor ~> errorToEither ~> merge
-      mergeProtos ~> protoToEither ~> merge ~> timedStopper
+      split.out4 ~> reconnectProcessor ~> mergeProtos
+      split.out3 ~> errorProcessor ~> errorToEither ~> merge.preferred
+      mergeProtos.out.takeWhile(msg => msg match {
+        case Reconnect => false
+        case _ => true
+      }, inclusive = true) ~> protoToEither ~> merge ~> timedStopper
 
       FlowShape(parse.in, timedStopper.out)
     }

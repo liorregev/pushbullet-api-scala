@@ -4,13 +4,15 @@ import java.time.Instant
 import java.util.concurrent.TimeoutException
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.ws.TextMessage
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
 import com.github.liorregev.pushbullet.domain.{ActivePush, CreatePushRequest, InactivePush, Push, PushData, PushTarget, UpdatePushRequest}
-import com.github.liorregev.pushbullet.listener.{DeadConnection, Listener, NopHandler}
+import com.github.liorregev.pushbullet.listener.{DeadConnection, Listener, Nop, NopHandler, Reconnect}
 import org.scalatest.{EitherValues, FunSuite, Matchers}
+import play.api.libs.json.Json
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.duration._
@@ -69,5 +71,22 @@ class ListenerTest extends FunSuite with Matchers with EitherValues {
       .run()
     val result = Await.result(done, 2 minutes)
     result.left.value should be (DeadConnection)
+  }
+
+  test("Reconnect Message") {
+    class TestClient() extends Client("") {
+      override def loadLatestServerTime()(implicit ec: ExecutionContext): Future[Instant] =
+        Future.successful(Instant.now())
+    }
+
+    val listener = new Listener(new TestClient(), new NopHandler {})
+    val flow = Flow.fromGraph(listener.processGraph)
+    val nopMsg = TextMessage.Strict(Json.toJson(Nop).toString())
+    val reconnectMsg = TextMessage.Strict(Json.toJson(Reconnect).toString())
+    val (_, done) = Source[TextMessage.Strict](List(nopMsg, nopMsg, nopMsg, reconnectMsg, nopMsg, nopMsg)).viaMat(flow)(Keep.left)
+      .toMat(Sink.last)(Keep.both)
+      .run()
+    val result = Await.result(done, 5 seconds)
+    result.right.value should be (Reconnect)
   }
 }
