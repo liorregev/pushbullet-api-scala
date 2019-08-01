@@ -19,7 +19,6 @@ import com.github.liorregev.pushbullet.listener.{Handler, Listener, ListenerErro
 import com.github.liorregev.pushbullet.serialization._
 import play.api.libs.json._
 
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 sealed trait ClientError
@@ -174,7 +173,6 @@ class Client(apiKey: String)(implicit system: ActorSystem, loggerFactory: Logger
     val (finishPromise, done) = Source.maybe
       .viaMat(webSocketFlow)(Keep.left)
       .viaMat(flow)(Keep.left)
-      .idleTimeout(1 minute)
       .toMat(Sink.last)(Keep.both)
       .run()
     val stopListening: () => Unit = () => finishPromise.success(None)

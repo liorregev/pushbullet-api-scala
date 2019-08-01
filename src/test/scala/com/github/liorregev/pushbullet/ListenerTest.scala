@@ -29,7 +29,7 @@ class ListenerTest extends FunSuite with Matchers with EitherValues {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   test("base") {
-    val client = new Client("o.i8br1Q7KYE3IXHEPY01i7b1Qz2Z3Mz6j")
+    val client = new Client("o.RJqhZS8nfKLIdhM7MPXqPXz7IEgIq7ip")
     val (stop, closed) = client.startListening(new NopHandler {
       override def onPush(push: Push): Unit = push match {
         case active: ActivePush =>
