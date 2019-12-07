@@ -12,7 +12,7 @@ class NopProcessor(implicit loggerFactory: LoggerContext) extends GraphStage[Flo
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
     setHandler(in, new InHandler {
       override def onPush(): Unit = {
-        logger.info("Got Nop")
+        logger.debug("Got Nop")
         push(out, Nop)
       }
     })
